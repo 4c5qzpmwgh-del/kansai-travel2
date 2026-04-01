@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大阪通 - 深度旅行助手</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // 2. 初始化 Supabase 連線 (請確保金鑰正確)
+        const SUPABASE_URL = 'https://qspahhtjkwbwnlhvceni.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_KyvrI6oR3SB6QNC2O10efw_-tgOyzZ7'; 
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    </script>
+    <style>
+        :root {
+            --primary-color: #D32F2F; 
+            --secondary-color: #FFC107;
+            --bg-color: #F4F6F8;
+            --text-dark: #333;
+            --text-light: #666;
+            --white: #FFF;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, '微軟正黑體', sans-serif; }
+        body { background-color: #e0e5ec; display: flex; justify-content: center; }
+
+        .app-container {
+            width: 100%; max-width: 480px; background-color: var(--bg-color); min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative;
+        }
+
+        /* 頂部導航 */
+        header {
+            background-color: var(--primary-color); color: var(--white); padding: 20px;
+            border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100;
+        }
+
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .header-top h1 { font-size: 20px; font-weight: 600; }
+        .lang-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .weather-time { display: flex; justify-content: space-between; font-size: 14px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 10px; }
+
+        main { padding: 20px; padding-bottom: 20px; }
+
+        .section-title {
+            margin: 25px 0 15px; font-size: 18px; color: var(--text-dark);
+            border-left: 4px solid var(--primary-color); padding-left: 10px; font-weight: bold;
+        }
+
+        /* 九宮格導航 */
+        .quick-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px 10px; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: var(--text-dark); }
+        .nav-icon {
+            width: 50px; height: 50px; background-color: var(--white); border-radius: 15px;
+            display: flex; justify-content: center; align-items: center; font-size: 20px;
+            color: var(--primary-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 8px;
+            transition: transform 0.2s;
+        }
+        .nav-item:active .nav-icon { transform: scale(0.95); }
+        .nav-text { font-size: 12px; text-align: center; }
+
+        /* 旅遊必備清單樣式 */
+        .must-have-list { list-style: none; padding: 0; margin: 0; }
+        .must-have-item { display: flex; align-items: flex-start; margin-bottom: 12px; background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #eee; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .must-have-icon { font-size: 18px; color: var(--secondary-color); margin-right: 15px; margin-top: 2px; width: 24px; text-align: center; }
+        .must-have-text h4 { font-size: 14px; margin-bottom: 4px; color: var(--text-dark); }
+        .must-have-text p { font-size: 12px; color: var(--text-light); line-height: 1.5; margin: 0; }
+
+        /* 機場攻略卡片樣式 */
+        .content-card { background: var(--white); border-radius: 15px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .airport-tab-btns { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; border-radius: 10px; background: var(--bg-color); color: var(--text-light); font-weight: bold; cursor: pointer; }
+        .tab-btn.active { background: var(--primary-color); color: var(--white); }
+        .transport-method { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .transport-method:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .transport-title { font-weight: bold; color: #1a73e8; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+
+        /* 頁腳 */
+        footer { 
+            text-align: center; padding: 30px 20px; color: var(--text-light); font-size: 13px; 
+            background: var(--white); border-top-left-radius: 20px; border-top-right-radius: 20px; 
+            margin-top: 10px; line-height: 1.6;
+        }
+        .footer-date { font-weight: bold; color: var(--text-dark); margin-bottom: 5px; }
+        .footer-social { margin: 15px 0; display: flex; justify-content: center; gap: 15px; }
+        .footer-social-icon { 
+            width: 32px; height: 32px; background: #333; color: white; border-radius: 8px; 
+            display: flex; align-items: center; justify-content: center; font-size: 16px; 
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <div class="header-top">
+            <h1>大阪通 - 深度旅行助手</h1>
+            <button class="lang-btn">EN</button>
+        </div>
+        <div class="weather-time">
+            <div id="current-time"><i class="far fa-clock"></i> 讀取中...</div>
+            <div><i class="fas fa-sun"></i> 大阪晴朗, 18°C</div>
+        </div>
+    </header>
+
+    <main>
+        <h2 class="section-title">快速導航工具</h2>
+        <div class="quick-nav">
+            <a href="#airport" class="nav-item">
+                <div class="nav-icon"><i class="fas fa-plane-arrival"></i></div>
+                <div class="nav-text">機場攻略</div>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon"><i class="fas fa-subway"></i></div>
+                <div class="nav-text">交通規劃</div>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon"><i class="fas fa-ticket-alt"></i></div>
+                <div class="nav-text">周遊券</div>
+            </a>
+            <a href="osaka_magician.html" class="nav-item">
+                <div class="nav-icon" style="color: #e91e63;"><i class="fas fa-map-marked-alt"></i></div>
+                <div class="nav-text">行程魔法師</div>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon"><i class="fas fa-utensils"></i></div>
+                <div class="nav-text">美食推薦</div>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon"><i class="fas fa-shopping-bag"></i></div>
+                <div class="nav-text">購物必買</div>
+            </a>
+            <a href="accounting.html" class="nav-item">
+                <div class="nav-icon" style="color: #D32F2F;"><i class="fas fa-book"></i></div>
+                <div class="nav-text" style="font-weight:bold;">共用帳本</div>
+            </a>
+            <a href="#must-have" class="nav-item">
+                <div class="nav-icon"><i class="fas fa-suitcase"></i></div>
+                <div class="nav-text">旅遊必備</div>
+            </a>
+        </div>
+
+        <h2 class="section-title" id="airport">機場攻略</h2>
+        <div class="content-card">
+            <div class="airport-tab-btns">
+                <button class="tab-btn active">關西機場 (KIX)</button>
+                <button class="tab-btn">伊丹機場 (ITM)</button>
+            </div>
+            <div class="transport-method">
+                <div class="transport-title"><i class="fas fa-train"></i> (1) 南海電鐵 特急 Rapi:t</div>
+                <div style="font-size:13px; color:#666; line-height:1.6; margin-top:5px;">
+                    位置：第一航廈 2 樓鐵道車站。<br>
+                    時間：約 34-38 分鐘直達「難波站」。
+                </div>
+            </div>
+            <div class="transport-method">
+                <div class="transport-title"><i class="fas fa-subway"></i> (2) JR 關空特急 Haruka</div>
+                <div style="font-size:13px; color:#666; line-height:1.6; margin-top:5px;">
+                    位置：第一航廈 2 樓鐵道車站 (藍色閘口)。<br>
+                    路線：直達天王寺、新大阪、京都車站。
+                </div>
+            </div>
+        </div>
+
+        <h2 class="section-title" id="must-have">旅遊必備清單</h2>
+        <ul class="must-have-list">
+            <li class="must-have-item">
+                <div class="must-have-icon"><i class="fas fa-passport"></i></div>
+                <div class="must-have-text">
+                    <h4>護照與 VJW 條碼</h4>
+                    <p>護照效期需滿六個月。強烈建議提早填寫 Visit Japan Web 取得通關 QR Code。</p>
+                </div>
+            </li>
+            <li class="must-have-item">
+                <div class="must-have-icon"><i class="fas fa-wifi"></i></div>
+                <div class="must-have-text">
+                    <h4>上網 SIM 卡 / eSIM</h4>
+                    <p>查 Google 地圖、乘換案內、翻譯菜單必備工具。</p>
+                </div>
+            </li>
+            <li class="must-have-item">
+                <div class="must-have-icon"><i class="far fa-credit-card"></i></div>
+                <div class="must-have-text">
+                    <h4>ICOCA 或 Suica 交通卡</h4>
+                    <p>搭乘地鐵與超商付款神器，iPhone 用戶可直接綁定 Apple Pay。</p>
+                </div>
+            </li>
+            <li class="must-have-item">
+                <div class="must-have-icon"><i class="fas fa-coins"></i></div>
+                <div class="must-have-text">
+                    <h4>日幣現金與零錢包</h4>
+                    <p>多數大型商店可刷卡，但黑門市場、拉麵食券機、神社參拜仍需使用現金。</p>
+                </div>
+            </li>
+            <li class="must-have-item">
+                <div class="must-have-icon"><i class="fas fa-shoe-prints"></i></div>
+                <div class="must-have-text">
+                    <h4>好穿的健走鞋</h4>
+                    <p>在日本自由行每天平均步數 1.5 萬到 2 萬步，一雙舒適的鞋子是救星。</p>
+                </div>
+            </li>
+        </ul>
+    </main>
+
+    <footer>
+        <div class="footer-date">31,Aug-04,Sep</div>
+        <div>自由選擇<br>寫下專屬我們的大阪旅行故事。</div>
+        <div class="footer-social">
+            <a href="https://www.instagram.com/mengchi1570/" target="_blank" class="footer-social-icon"><i class="fab fa-instagram"></i></a>
+            <a href="https://line.me/ti/p/~mengchi1105" target="_blank" class="footer-social-icon"><i class="fab fa-line"></i></a>
+        </div>
+        <div style="font-size:12px; margin-bottom:10px;">聯絡方式：<br>Line : mengchi1105<br>Instagram : mengchi1570</div>
+        <div style="opacity: 0.6;">&copy; 2026 大阪通 - 深度旅行助手</div>
+    </footer>
+</div>
+
+<script>
+    function updateOsakaTime() {
+        const timeElement = document.getElementById('current-time');
+        const now = new Date();
+        const osakaTimeOptions = { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+        const formatter = new Intl.DateTimeFormat('zh-TW', osakaTimeOptions);
+        const parts = formatter.formatToParts(now);
+        let month = '', day = '', hour = '', minute = '';
+        parts.forEach(part => {
+            if(part.type === 'month') month = part.value;
+            if(part.type === 'day') day = part.value;
+            if(part.type === 'hour') hour = part.value;
+            if(part.type === 'minute') minute = part.value;
+        });
+        const dayOfWeek = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"})).getDay()];
+        timeElement.innerHTML = `<i class="far fa-clock"></i> ${month}/${day} (${dayOfWeek}) ${hour}:${minute} (大阪時間)`;
+    }
+    updateOsakaTime();
+    setInterval(updateOsakaTime, 60000);
+</script>
+
+</body>
+</html>
