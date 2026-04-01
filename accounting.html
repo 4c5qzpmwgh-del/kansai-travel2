@@ -240,21 +240,53 @@
 </div>
 
 <script>
-    // --- 資料存取 ---
-    let members = JSON.parse(localStorage.getItem('ledger_members')) || ["我", "旅伴A", "旅伴B"];
-    let dailyRates = JSON.parse(localStorage.getItem('ledger_rates')) || {}; 
-    let transactions = JSON.parse(localStorage.getItem('travel_ledger_smart')) || [];
+    // --- 1. 雲端變數初始化 ---
+    let members = ["Alvin", "Mark", "Lichia"]; // 預設值，隨後會被雲端覆蓋
+    let dailyRates = {}; 
+    let transactions = [];
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    document.getElementById('inputDate').value = todayStr;
-    document.getElementById('rateDate').value = todayStr;
+    // 頁面啟動時執行雲端同步
+    window.onload = async () => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if(document.getElementById('inputDate')) document.getElementById('inputDate').value = todayStr;
+        if(document.getElementById('rateDate')) document.getElementById('rateDate').value = todayStr;
+        
+        // 第一次載入資料
+        await loadCloudData();
+        
+        // 啟動即時更新監聽 (Realtime)
+        // 當旅伴記帳，您的手機會立刻自動更新畫面
+        sb.channel('any').on('postgres_changes', { event: '*', table: 'transactions' }, () => {
+            loadCloudData();
+        }).subscribe();
 
-    // --- 視圖切換與初始化 ---
+        sb.channel('settings').on('postgres_changes', { event: '*', table: 'trip_settings' }, () => {
+            loadCloudData();
+        }).subscribe();
+    };
+
+    // 核心讀取函式：從雲端抓取成員、匯率與帳單
+    async function loadCloudData() {
+        // A. 讀取成員與匯率 (ID 固定為 1)
+        const { data: set } = await sb.from('trip_settings').select('*').eq('id', 1).single();
+        if (set) {
+            members = set.members || members;
+            dailyRates = set.daily_rates || dailyRates;
+        }
+        
+        // B. 讀取帳單明細 (按日期排序)
+        const { data: tx } = await sb.from('transactions').select('*').order('date', { ascending: false });
+        if (tx) transactions = tx;
+        
+        updateUI(); 
+    }
+
+    // --- 2. 視圖切換與智慧輸入 (保持原有的 UI 邏輯) ---
     function switchView(viewId, navElement) {
         document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         document.getElementById('view-' + viewId).classList.add('active');
-        navElement.classList.add('active');
+        if(navElement) navElement.classList.add('active');
         
         if (viewId === 'add') {
             buildMemberInputs();
@@ -269,92 +301,51 @@
         updateUI();
     }
 
-    // --- 智慧輸入邏輯 (重點) ---
     function buildMemberInputs() {
         const container = document.getElementById('memberInputsContainer');
+        if(!container) return;
         container.innerHTML = members.map((m, i) => `
             <div class="member-spend-row">
                 <div class="member-name">${m}</div>
-                <input type="number" id="mem-input-${i}" class="mem-val-input" placeholder="0" min="0" oninput="handleMemberInput()">
+                <input type="number" id="mem-input-${i}" class="mem-val-input" placeholder="0" oninput="handleMemberInput()">
             </div>
         `).join('');
+        
+        // 同步更新「誰先代墊」的下拉選單
+        const payerSelect = document.getElementById('inputPayer');
+        if(payerSelect) payerSelect.innerHTML = members.map((m, i) => `<option value="${i}">${m}</option>`).join('');
     }
 
-    // 當使用者在「總金額」欄位輸入時：自動平分給所有人
     function handleTotalInput() {
         const total = parseFloat(document.getElementById('inputTotalAmount').value) || 0;
-        const perPerson = (total / members.length).toFixed(1); // 留一位小數以防除不盡
-        
-        for (let i = 0; i < members.length; i++) {
-            // 如果總額是 0，清空欄位；否則填寫平分金額
-            document.getElementById(`mem-input-${i}`).value = total > 0 ? perPerson : '';
-        }
+        const perPerson = (total / members.length).toFixed(1);
+        members.forEach((_, i) => {
+            const input = document.getElementById(`mem-input-${i}`);
+            if(input) input.value = total > 0 ? perPerson : '';
+        });
     }
 
-    // 當使用者在「個別成員」欄位輸入時：自動加總回「總金額」
     function handleMemberInput() {
         let sum = 0;
-        for (let i = 0; i < members.length; i++) {
-            const val = parseFloat(document.getElementById(`mem-input-${i}`).value) || 0;
-            sum += val;
-        }
-        // 如果手動改了個人金額，就把算出來的總和更新到上方總額欄位
+        members.forEach((_, i) => {
+            const input = document.getElementById(`mem-input-${i}`);
+            if(input) sum += parseFloat(input.value) || 0;
+        });
         document.getElementById('inputTotalAmount').value = sum > 0 ? sum : '';
     }
 
-    // 處理支付方式切換 (PayPay 標題變色)
     function handlePayMethodChange() {
         const method = document.getElementById('inputPayMethod').value;
-        const feeGroup = document.getElementById('feeGroup');
-        const amountLabel = document.getElementById('amountLabel');
-
-        feeGroup.classList.toggle('hidden', method !== 'credit');
-        
-        if (method === 'paypay') {
-            amountLabel.innerText = '💰 總金額 (台幣 NT$)';
-            amountLabel.style.color = 'var(--paypay)';
-        } else {
-            amountLabel.innerText = '💰 總金額 (日圓 ¥)';
-            amountLabel.style.color = 'var(--primary)';
-        }
+        document.getElementById('feeGroup').classList.toggle('hidden', method !== 'credit');
+        const label = document.getElementById('amountLabel');
+        label.innerText = method === 'paypay' ? '💰 總金額 (台幣 NT$)' : '💰 總金額 (日圓 ¥)';
+        label.style.color = method === 'paypay' ? 'var(--paypay)' : 'var(--primary)';
     }
 
-    // --- 設定功能 ---
-    function saveMembers() {
-        members = [
-            document.getElementById('settingMem1').value.trim() || "成員1",
-            document.getElementById('settingMem2').value.trim() || "成員2",
-            document.getElementById('settingMem3').value.trim() || "成員3"
-        ];
-        localStorage.setItem('ledger_members', JSON.stringify(members));
-        updateUI(); alert('成員儲存成功！');
-    }
+    // --- 3. 雲端核心操作 (CRUD) ---
 
-    function addDailyRate() {
-        const d = document.getElementById('rateDate').value;
-        const r = parseFloat(document.getElementById('rateValue').value);
-        if (!d || isNaN(r) || r <= 0) return alert('請輸入有效日期與匯率！');
-        dailyRates[d] = r;
-        localStorage.setItem('ledger_rates', JSON.stringify(dailyRates));
-        renderRates(); updateUI(); 
-        document.getElementById('rateValue').value = '';
-    }
-
-    function renderRates() {
-        const list = document.getElementById('dailyRateList');
-        list.innerHTML = Object.keys(dailyRates).sort().reverse().map(d => `<li class="rate-item"><span>${d}</span> <span>${dailyRates[d]}</span></li>`).join('');
-    }
-
-    function checkRateForDate() {
-        const date = document.getElementById('inputDate').value;
-        const hint = document.getElementById('dateRateHint');
-        const rate = dailyRates[date];
-        hint.innerText = rate ? `💡 將使用 ${date} 匯率：${rate}` : `⚠️ 尚未設定 ${date} 匯率，請先至「設定」新增！`;
-        hint.style.color = rate ? 'var(--success)' : 'var(--primary)';
-    }
-
-    // --- 記帳功能 ---
-    function addTransaction() {
+    // 記帳：將資料推送到雲端資料表
+    async function addTransaction() {
         const date = document.getElementById('inputDate').value;
         const title = document.getElementById('inputTitle').value.trim();
         const payMethod = document.getElementById('inputPayMethod').value;
@@ -362,83 +353,83 @@
         const payerIndex = parseInt(document.getElementById('inputPayer').value);
         const rate = dailyRates[date];
 
-        if (!date || !title) return alert('請填寫完整資訊');
-        if (payMethod === 'paypay' && !rate) return alert('PayPay 需設定當日匯率以反推日幣總支出！');
+        if (!title || !document.getElementById('inputTotalAmount').value) return alert('請填寫完整資訊');
+        if (payMethod === 'paypay' && !rate) return alert('PayPay 需設定當日匯率！');
 
-        // 收集每個人最終在輸入框裡的值 (這時已經是被使用者確認過的金額了)
-        let rawSpendings = [];
-        let rawTotal = 0;
-        for(let i=0; i<members.length; i++) {
-            let v = parseFloat(document.getElementById(`mem-input-${i}`).value) || 0;
-            rawSpendings.push(v);
-            rawTotal += v;
-        }
-
-        if (rawTotal <= 0) return alert('請輸入花費金額');
-
+        let rawSpendings = members.map((_, i) => parseFloat(document.getElementById(`mem-input-${i}`).value) || 0);
         let feeRate = payMethod === 'credit' ? (parseFloat(document.getElementById('inputFeeRate').value) || 0) : 0;
-        let finalJpyTotal = 0, finalTwdTotal = 0;
-        let processedSpendings = []; // 存放精算結果 {jpy, twd}
-
-        rawSpendings.forEach(rawAmt => {
+        
+        let processedSpendings = rawSpendings.map(amt => {
             let jpy = 0, twd = 0;
-            if (payMethod === 'paypay') {
-                twd = rawAmt; 
-                jpy = rawAmt / rate;
-            } else if (payMethod === 'credit') {
-                jpy = rawAmt * (1 + feeRate/100);
-                if(rate) twd = jpy * rate;
-            } else { // cash
-                jpy = rawAmt;
-                if(rate) twd = jpy * rate;
-            }
-            processedSpendings.push({ jpy, twd });
-            finalJpyTotal += jpy;
-            finalTwdTotal += twd;
+            if (payMethod === 'paypay') { twd = amt; jpy = amt / rate; }
+            else if (payMethod === 'credit') { jpy = amt * (1 + feeRate/100); if(rate) twd = jpy * rate; }
+            else { jpy = amt; if(rate) twd = jpy * rate; }
+            return { jpy, twd };
         });
 
-        transactions.push({ 
-            id: Date.now(), date, title, payMethod, category, payerIndex, feeRate,
-            totalJpy: finalJpyTotal, totalTwd: finalTwdTotal, spendings: processedSpendings
-        });
+        let finalJpyTotal = processedSpendings.reduce((a, b) => a + b.jpy, 0);
+        let finalTwdTotal = processedSpendings.reduce((a, b) => a + b.twd, 0);
 
-        localStorage.setItem('travel_ledger_smart', JSON.stringify(transactions));
-        
-        // 清空表單
-        document.getElementById('inputTitle').value = '';
-        document.getElementById('inputTotalAmount').value = '';
-        for(let i=0; i<members.length; i++) document.getElementById(`mem-input-${i}`).value = '';
-        
-        alert('記帳成功！');
-        document.querySelectorAll('.nav-item')[2].click(); 
-    }
+        // 修改：使用 sb.from('transactions').insert 存入雲端
+        const { error } = await sb.from('transactions').insert([{ 
+            date, title, pay_method: payMethod, category, payer_index: payerIndex, 
+            total_jpy: finalJpyTotal, total_twd: finalTwdTotal, spendings: processedSpendings 
+        }]);
 
-    function deleteTransaction(id) {
-        if(confirm('刪除這筆紀錄？')) {
-            transactions = transactions.filter(t => t.id !== id);
-            localStorage.setItem('travel_ledger_smart', JSON.stringify(transactions));
-            updateUI();
+        if (!error) {
+            alert('雲端同步成功！');
+            document.getElementById('inputTitle').value = '';
+            document.getElementById('inputTotalAmount').value = '';
+            switchView('list', document.querySelectorAll('.nav-item')[2]);
+        } else {
+            alert('儲存失敗：' + error.message);
         }
     }
 
-    // --- 渲染 UI ---
+    // 刪除：從雲端移除紀錄
+    async function deleteTransaction(id) {
+        if(confirm('確定刪除這筆雲端紀錄？')) {
+            const { error } = await sb.from('transactions').delete().eq('id', id);
+            if(!error) loadCloudData();
+        }
+    }
+
+    // 設定：同步成員名單到雲端
+    async function saveMembers() {
+        const newMems = [
+            document.getElementById('settingMem1').value.trim() || "成員1",
+            document.getElementById('settingMem2').value.trim() || "成員2",
+            document.getElementById('settingMem3').value.trim() || "成員3"
+        ];
+        const { error } = await sb.from('trip_settings').upsert({ id: 1, members: newMems });
+        if(!error) alert('成員名單已同步至雲端！');
+        await loadCloudData();
+    }
+
+    // 匯率：同步匯率到雲端
+    async function addDailyRate() {
+        const d = document.getElementById('rateDate').value;
+        const r = parseFloat(document.getElementById('rateValue').value);
+        if (!d || isNaN(r) || r <= 0) return alert('請輸入有效匯率！');
+        dailyRates[d] = r;
+        const { error } = await sb.from('trip_settings').upsert({ id: 1, daily_rates: dailyRates });
+        if(!error) alert('匯率已同步至雲端！');
+        renderRates();
+        updateUI();
+    }
+
+    // --- 4. 畫面更新渲染 ---
     function updateUI() {
-        const payerSelect = document.getElementById('inputPayer');
-        payerSelect.innerHTML = members.map((m, i) => `<option value="${i}">${m}</option>`).join('');
         renderDashboard();
         renderList();
         renderSettlement();
     }
 
     function renderDashboard() {
-        let totalJpy = 0, totalTwd = 0;
+        let totalJpy = transactions.reduce((a, b) => a + (b.total_jpy || 0), 0);
+        let totalTwd = transactions.reduce((a, b) => a + (b.total_twd || 0), 0);
         let cats = { food: 0, transport: 0, shop: 0, other: 0 };
-        
-        transactions.forEach(t => { 
-            totalJpy += t.totalJpy; 
-            cats[t.category] += t.totalJpy; 
-            if(t.totalTwd > 0) totalTwd += t.totalTwd;
-        });
+        transactions.forEach(t => cats[t.category] += (t.total_jpy || 0));
 
         document.getElementById('totalJpy').innerText = `¥ ${Math.round(totalJpy).toLocaleString()}`;
         document.getElementById('totalTwd').innerText = `精確台幣: NT$ ${Math.round(totalTwd).toLocaleString()}`;
@@ -452,72 +443,72 @@
 
     function renderList() {
         const listEl = document.getElementById('recordList');
-        listEl.innerHTML = (transactions.length === 0) ? '<div style="text-align:center; color:#999; padding:20px;">尚無紀錄</div>' : '';
+        if(!listEl) return;
+        listEl.innerHTML = (transactions.length === 0) ? '<div style="text-align:center; color:#999; padding:20px;">尚無雲端紀錄</div>' : '';
         
-        [...transactions].reverse().forEach(t => {
+        transactions.forEach(t => {
             const icon = { food:'utensils', transport:'train', shop:'shopping-bag', other:'ticket-alt' }[t.category] || 'coins';
-            let methodStr = { cash: '💵 現金', paypay: '📱 PayPay', credit: '💳 信用卡' }[t.payMethod];
-            let extraStr = t.payMethod === 'credit' ? ` (+${t.feeRate}%)` : (t.payMethod === 'paypay' ? ` (台幣扣款)` : '');
+            let methodStr = { cash: '💵 現金', paypay: '📱 PayPay', credit: '💳 信用卡' }[t.pay_method];
+            let breakdown = t.spendings.map((s, i) => `${members[i].charAt(0)}:${Math.round(s.jpy)}`).join(' | ');
             
-            // 顯示每個人的實付細項 (取整數)
-            let breakdownStr = t.spendings.map((s, i) => `${members[i].charAt(0)}:${Math.round(s.jpy)}`).join(' | ');
-            
-            let twdClass = t.payMethod === 'paypay' ? 'record-paypay' : 'record-twd';
-            let twdStr = t.totalTwd > 0 ? `NT$ ${Math.round(t.totalTwd).toLocaleString()}` : "無當日匯率";
-
             listEl.innerHTML += `
                 <li class="record-item">
                     <div class="record-icon icon-${t.category}"><i class="fas fa-${icon}"></i></div>
                     <div class="record-info">
                         <div class="record-title">${t.title}</div>
-                        <div class="record-details">${t.date} | ${members[t.payerIndex]}墊 | ${methodStr}${extraStr}</div>
-                        <div class="record-breakdown">${breakdownStr}</div>
+                        <div class="record-details">${t.date} | ${members[t.payer_index]}付 | ${methodStr}</div>
+                        <div class="record-breakdown">${breakdown}</div>
                     </div>
                     <div class="record-amount-box">
-                        <div class="record-amount">¥ ${Math.round(t.totalJpy).toLocaleString()}</div>
-                        <div class="${twdClass}">${twdStr}</div>
+                        <div class="record-amount">¥ ${Math.round(t.total_jpy).toLocaleString()}</div>
+                        <div class="record-twd">NT$ ${Math.round(t.total_twd).toLocaleString()}</div>
                     </div>
-                    <button class="btn-delete" onclick="deleteTransaction(${t.id})"><i class="fas fa-times-circle"></i></button>
+                    <button class="btn-delete" onclick="deleteTransaction('${t.id}')"><i class="fas fa-times-circle"></i></button>
                 </li>
             `;
         });
     }
 
     function renderSettlement() {
-        let paidJpy = [0,0,0], spentJpy = [0,0,0];
-        let paidTwd = [0,0,0], spentTwd = [0,0,0];
+        let paidJpy = members.map(() => 0), spentJpy = members.map(() => 0);
+        let paidTwd = members.map(() => 0), spentTwd = members.map(() => 0);
 
         transactions.forEach(t => {
-            paidJpy[t.payerIndex] += t.totalJpy;
-            paidTwd[t.payerIndex] += t.totalTwd;
-            
+            paidJpy[t.payer_index] += t.total_jpy;
+            paidTwd[t.payer_index] += t.total_twd;
             t.spendings.forEach((s, i) => {
                 spentJpy[i] += s.jpy;
                 spentTwd[i] += s.twd;
             });
         });
 
-        let html = '';
-        for (let i = 0; i < 3; i++) {
-            let balanceJpy = paidJpy[i] - spentJpy[i];
-            let balanceTwd = paidTwd[i] - spentTwd[i];
-            
-            html += `
+        document.getElementById('settlementList').innerHTML = members.map((m, i) => {
+            let diffJpy = paidJpy[i] - spentJpy[i];
+            let diffTwd = paidTwd[i] - spentTwd[i];
+            return `
                 <div class="settle-item">
-                    <div class="settle-name"><i class="fas fa-user-circle" style="color:#ccc; font-size:18px;"></i> ${members[i]}</div>
-                    <div class="settle-status ${balanceJpy >= 0 ? 'get' : 'pay'}">
-                        <div>${balanceJpy >= 0 ? '應收' : '應付'} ¥ ${Math.round(Math.abs(balanceJpy)).toLocaleString()}</div>
-                        <div style="font-size:11px; opacity:0.8; margin-top:2px;">(約 NT$ ${Math.round(Math.abs(balanceTwd)).toLocaleString()})</div>
+                    <div class="settle-name"><i class="fas fa-user-circle" style="color:#ccc; font-size:18px;"></i> ${m}</div>
+                    <div class="settle-status ${diffJpy >= 0 ? 'get' : 'pay'}">
+                        <div>${diffJpy >= 0 ? '應收' : '應付'} ¥ ${Math.round(Math.abs(diffJpy)).toLocaleString()}</div>
+                        <div style="font-size:11px; opacity:0.8;">(約 NT$ ${Math.round(Math.abs(diffTwd)).toLocaleString()})</div>
                     </div>
                 </div>
             `;
-        }
-        document.getElementById('settlementList').innerHTML = html;
+        }).join('');
     }
 
-    // 啟動
-    buildMemberInputs();
-    updateUI();
+    function renderRates() {
+        const list = document.getElementById('dailyRateList');
+        if(list) list.innerHTML = Object.keys(dailyRates).sort().reverse().map(d => `<li class="rate-item"><span>${d}</span> <span>${dailyRates[d]}</span></li>`).join('');
+    }
+
+    function checkRateForDate() {
+        const date = document.getElementById('inputDate').value;
+        const hint = document.getElementById('dateRateHint');
+        const rate = dailyRates[date];
+        hint.innerText = rate ? `💡 將使用 ${date} 匯率：${rate}` : `⚠️ 尚未設定 ${date} 匯率，請先至「設定」新增！`;
+        hint.style.color = rate ? 'var(--success)' : 'var(--primary)';
+    }
 </script>
 
 </body>
