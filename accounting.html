@@ -396,13 +396,25 @@
             finalJpyTotal += jpy;
             finalTwdTotal += twd;
         });
+// --- 修改為：將資料傳送到 Supabase 雲端 ---
+const { error } = await sb.from('transactions').insert([{ 
+    date, 
+    title, 
+    pay_method: payMethod, 
+    category, 
+    payer_index: payerIndex, 
+    total_jpy: finalJpyTotal, 
+    total_twd: finalTwdTotal, 
+    spendings: processedSpendings 
+}]);
 
-        transactions.push({ 
-            id: Date.now(), date, title, payMethod, category, payerIndex, feeRate,
-            totalJpy: finalJpyTotal, totalTwd: finalTwdTotal, spendings: processedSpendings
-        });
-
-        localStorage.setItem('travel_ledger_smart', JSON.stringify(transactions));
+if (!error) {
+    alert('雲端同步成功！');
+    // 自動跳轉到明細頁面
+    switchView('list', document.querySelectorAll('.nav-item')[2]);
+} else {
+    alert('雲端儲存失敗：' + error.message);
+}
         
         // 清空表單
         document.getElementById('inputTitle').value = '';
