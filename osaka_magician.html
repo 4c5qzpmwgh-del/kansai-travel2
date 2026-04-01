@@ -99,6 +99,7 @@
     <div class="selector-section">
         <div id="accordion"></div>
         <button class="btn-main" onclick="initPlanner()">✨ 開始智慧裝箱排程 (以大阪為基地)</button>
+	<button id="btnCloud" class="btn-main" style="background: #059669; margin-top: 10px;" onclick="saveToCloud()">💾 同步到雲端 (存檔)</button>
     </div>
 
     <div class="result-container" id="resultArea"></div>
@@ -321,33 +322,75 @@ function renderResult(unassigned = []) {
     target.innerHTML = html;
 }
 
-renderSelection();
-</script>
-<script>
-    // 魔法排程完成後，一鍵同步給旅伴
-    async function saveToCloud() {
-        const btn = document.getElementById('btnCloud');
-        btn.innerText = "正在儲存...";
-        
-        const { error } = await sb.from('saved_itinerary').upsert({
-            id: '99999999-9999-9999-9999-999999999999', // 固定 ID 讓全員共享
-            config: config,
-            selected_spots: Array.from(selectedSet),
-            schedule: scheduledDays
-        });
-        
-        if(!error) alert("行程已同步到雲端！");
-        btn.innerText = "💾 同步到雲端";
-    }
+// --- 1. 雲端同步功能 ---
+async function saveToCloud() {
+    const btn = document.getElementById('btnCloud');
+    if(!btn) return;
+    btn.innerText = "正在儲存...";
+    btn.disabled = true;
 
-    // 讀取雲端行程
-    async function loadFromCloud() {
-        const { data } = await sb.from('saved_itinerary').select('*').single();
-        if (data) {
+    const selectedArray = Array.from(selectedSet);
+    const { error } = await sb.from('saved_itinerary').upsert({
+        id: '99999999-9999-9999-9999-999999999999',
+        config: config,
+        selected_spots: selectedArray,
+        schedule: scheduledDays
+    });
+
+    if (!error) { 
+        alert("✅ 行程已同步到雲端！"); 
+    } else { 
+        alert("❌ 儲存失敗：" + error.message); 
+    }
+    btn.innerText = "💾 同步到雲端 (存檔)";
+    btn.disabled = false;
+}
+
+async function loadFromCloud() {
+    const { data, error } = await sb.from('saved_itinerary')
+        .select('*')
+        .eq('id', '99999999-9999-9999-9999-999999999999')
+        .single();
+
+    if (data) {
+        config = data.config || {};
+        if (config.days) document.getElementById('days').value = config.days;
+        if (config.arr) document.getElementById('arrTime').value = config.arr;
+        if (config.dep) document.getElementById('depTime').value = config.dep;
+        if (config.hotel) document.getElementById('hotel').value = config.hotel;
+        
+        selectedSet = new Set(data.selected_spots);
+        restoreUI(); // 還原景點選取狀態
+
+        if (data.schedule && data.schedule.length > 0) {
             scheduledDays = data.schedule;
-            renderResult();
+            document.getElementById('resultArea').style.display = 'block';
+            renderResult(); // 還原排好的行程表
         }
     }
+}
+
+// 還原 UI：讓選過的景點變回橘色
+function restoreUI() {
+    const items = document.querySelectorAll('.spot-item');
+    items.forEach(item => {
+        const titleEl = item.querySelector('div:last-child div:first-child');
+        if(!titleEl) return;
+        const spotName = titleEl.innerText;
+        for (let s of selectedSet) {
+            if (s.name === spotName) {
+                item.classList.add('active');
+                break;
+            }
+        }
+    });
+}
+
+// --- 2. 網頁開啟初始化 ---
+window.onload = async () => {
+    renderSelection(); // 畫出景點清單 (確保只呼叫這一次)
+    await loadFromCloud(); // 接著從雲端抓取資料並還原狀態
+};
 </script>
 </body>
 </html>
