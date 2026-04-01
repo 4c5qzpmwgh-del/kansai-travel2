@@ -240,10 +240,10 @@
 </div>
 
 <script>
-	// --- 1-A. 修改為雲端變數定義 ---
-	let members = ["Alvin", "Mark", "Lichia"]; // 預設名稱，稍後會被雲端覆蓋
-	let dailyRates = {}; 
-	let transactions = [];
+    // --- 資料存取 ---
+    let members = JSON.parse(localStorage.getItem('ledger_members')) || ["我", "旅伴A", "旅伴B"];
+    let dailyRates = JSON.parse(localStorage.getItem('ledger_rates')) || {}; 
+    let transactions = JSON.parse(localStorage.getItem('travel_ledger_smart')) || [];
 
     const todayStr = new Date().toISOString().split('T')[0];
     document.getElementById('inputDate').value = todayStr;
@@ -396,25 +396,13 @@
             finalJpyTotal += jpy;
             finalTwdTotal += twd;
         });
-// --- 修改為：將資料傳送到 Supabase 雲端 ---
-const { error } = await sb.from('transactions').insert([{ 
-    date, 
-    title, 
-    pay_method: payMethod, 
-    category, 
-    payer_index: payerIndex, 
-    total_jpy: finalJpyTotal, 
-    total_twd: finalTwdTotal, 
-    spendings: processedSpendings 
-}]);
 
-if (!error) {
-    alert('雲端同步成功！');
-    // 自動跳轉到明細頁面
-    switchView('list', document.querySelectorAll('.nav-item')[2]);
-} else {
-    alert('雲端儲存失敗：' + error.message);
-}
+        transactions.push({ 
+            id: Date.now(), date, title, payMethod, category, payerIndex, feeRate,
+            totalJpy: finalJpyTotal, totalTwd: finalTwdTotal, spendings: processedSpendings
+        });
+
+        localStorage.setItem('travel_ledger_smart', JSON.stringify(transactions));
         
         // 清空表單
         document.getElementById('inputTitle').value = '';
@@ -528,19 +516,8 @@ if (!error) {
     }
 
     // 啟動
-// --- 1-B. 頁面啟動時執行雲端同步 ---
-window.onload = async () => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    document.getElementById('inputDate').value = todayStr;
-    document.getElementById('rateDate').value = todayStr;
-    
-    await loadCloudData(); // 讀取雲端資料
-    
-    // 啟動即時更新：旅伴記帳，您的手機立刻更新
-    sb.channel('accounting_realtime').on('postgres_changes', { event: '*', table: 'transactions' }, () => {
-        loadCloudData();
-    }).subscribe();
-};
+    buildMemberInputs();
+    updateUI();
 </script>
 
 </body>
