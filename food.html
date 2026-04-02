@@ -100,6 +100,7 @@
     <div class="controls">
         <div class="filter-row" id="filterRow">
             <div class="chip active" onclick="filterCat('全部')">全部</div>
+	    <div class="chip" onclick="filterCat('抹茶專門')">🍵 抹茶專門</div>
             <div class="chip" onclick="filterCat('日式料理')">🍱 日式</div>
             <div class="chip" onclick="filterCat('西式與創意')">🍝 西式/法義</div>
             <div class="chip" onclick="filterCat('甜點咖啡')">🍵 甜點/咖啡</div>
@@ -122,6 +123,19 @@
 
 <script>
     const foodDB = [
+	{ name: "中村藤吉 本店", type: "抹茶專門", cat: "評價推薦", area: "京都 (宇治)", price: 2500, desc: "宇治抹茶界的天花板，招牌生茶果凍必吃", weight: 2, star: "★★★★★" },
+	{ name: "伊藤久右衛門", type: "抹茶專門", cat: "遊客推薦", area: "京都 (宇治)", price: 1800, desc: "精緻抹茶聖代與多樣化抹茶伴手禮", weight: 1, star: "" },
+	{ name: "辻利 祇園本店", type: "抹茶專門", cat: "遊客推薦", area: "京都 (祇園)", price: 1500, desc: "祇園地標級抹茶老店，推薦特製聖代", weight: 1, star: "" },
+	{ name: "茶寮都路里", type: "抹茶專門", cat: "評價推薦", area: "京都/大阪", price: 1600, desc: "高品質宇治抹茶專賣，濃郁口感的首選", weight: 2, star: "★★★★☆" },
+	{ name: "Wad Omotenashi Cafe", type: "抹茶專門", cat: "當地人推薦", area: "大阪 (心齋橋)", price: 2000, desc: "現代與傳統結合的茶屋，抹茶與陶器美學", weight: 3, star: "" },
+	{ name: "菓匠 祝 (Kashō Iwai)", type: "抹茶專門", cat: "當地人推薦", area: "奈良", price: 1200, desc: "大和抹茶刨冰與精緻大福，在地人首選", weight: 3, star: "" },
+	{ name: "Nana's Green Tea", type: "抹茶專門", cat: "遊客推薦", area: "大阪 (梅田)", price: 1400, desc: "抹茶界的星巴克，適合快速享受高品質抹茶", weight: 1, star: "" },
+	{ name: "茶匠清水一芳園 本店", type: "抹茶專門", cat: "當地人推薦", area: "京都 (東山)", price: 1200, desc: "【必點：抹茶慕斯刨冰】專業茶商直營，主打極致濃郁的抹茶泡泡感", weight: 3, star: "" },
+	{ name: "丸久小山園 西洞院店", type: "抹茶專門", cat: "當地人推薦", area: "京都 (中京區)", price: 1500, desc: "【必點：抹茶蛋糕捲】極具美學的茶室空間，抹茶控公認的口感王者", weight: 3, star: "" },
+	{ name: "MACCHA HOUSE 抹茶館 京都河原町", type: "抹茶專門", cat: "遊客推薦", area: "京都 (河原町)", price: 900, desc: "【必點：升級版抹茶提拉米蘇】用升官酒木盒裝盛，視覺與美味兼具", weight: 1, star: "" },
+	{ name: "Matcha Republic (抹茶共和國)", type: "抹茶專門", cat: "當地人推薦", area: "京都 (宇治)", price: 850, desc: "【必點：墨水瓶抹茶】將抹茶裝進墨水瓶中，宇治最吸睛的網美打卡店", weight: 3, star: "" },
+	{ name: "通圓本店 (通圓茶屋)", type: "抹茶專門", cat: "當地人推薦", area: "京都 (宇治)", price: 1000, desc: "【必點：抹茶糰子】日本最古老的茶屋（西元 1160 年創立），充滿歷史感", weight: 3, star: "" },
+	{ name: "Wad Omotenashi Cafe", type: "抹茶專門", cat: "當地人推薦", area: "大阪 (心齋橋)", price: 2000, desc: "【必點：手刷抹茶】結合當代陶瓷藝術與傳統茶道，非常有質感的抹茶空間", weight: 3, star: "" },
         { name: "麵屋丈六", type: "日式料理", cat: "當地人推薦", area: "大阪 (難波)", price: 1000, desc: "濃郁高井田風醬油拉麵 (難波第一名)", weight: 3, star: "" },
         { name: "本家第一旭 本店", type: "日式料理", cat: "當地人推薦", area: "京都車站", price: 1100, desc: "創立於 1947 年的京風拉麵", weight: 3, star: "" },
         { name: "空蟬亭", type: "日式料理", cat: "評價推薦", area: "京都", price: 3500, desc: "Tabelog 第一高分、米其林推薦炸豬排", weight: 2, star: "★★★★★" },
